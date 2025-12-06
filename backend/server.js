@@ -3,17 +3,14 @@ const cors = require('cors');
 const { Pool } = require('pg');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
-require('dotenv').config();
+
+// ❌ Not needed on Railway if env vars are set there
+// require('dotenv').config();
 
 const app = express();
 const port = process.env.PORT || 3001;
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false,
-  },
-});
+/* ---------- CORS SETUP ---------- */
 
 const allowedOrigins = [
   'https://budgetbox-beta.vercel.app',
@@ -21,16 +18,40 @@ const allowedOrigins = [
 ];
 
 const corsOptions = {
-  origin: allowedOrigins,
+  origin(origin, callback) {
+    // Allow requests with no origin (like curl, Postman, health checks)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('Not allowed by CORS'));
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: false,
 };
 
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
 app.use(express.json());
+
+/* ---------- DATABASE SETUP ---------- */
+
+if (!process.env.DATABASE_URL) {
+  console.error('❌ DATABASE_URL is not defined');
+}
+if (!process.env.JWT_SECRET) {
+  console.error('❌ JWT_SECRET is not defined');
+}
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false, // required for Supabase
+  },
+});
+
+/* ---------- AUTH MIDDLEWARE ---------- */
 
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
@@ -48,6 +69,8 @@ const authenticateToken = (req, res, next) => {
     next();
   });
 };
+
+/* ---------- DB INIT ---------- */
 
 const initDatabase = async () => {
   try {
@@ -88,11 +111,13 @@ const initDatabase = async () => {
       [hashedPassword]
     );
 
-    console.log('Database initialized successfully');
+    console.log('✅ Database initialized successfully');
   } catch (error) {
-    console.error('Database initialization error:', error);
+    console.error('❌ Database initialization error:', error);
   }
 };
+
+/* ---------- ROUTES ---------- */
 
 app.post('/api/auth/login', async (req, res) => {
   try {
@@ -213,11 +238,14 @@ app.get('/api/budget/latest', authenticateToken, async (req, res) => {
   }
 });
 
+// Simple health endpoint (no DB)
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+/* ---------- START SERVER ---------- */
+
 app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+  console.log(`🚀 Server running on port ${port}`);
   initDatabase();
 });
