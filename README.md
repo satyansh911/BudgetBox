@@ -9,7 +9,8 @@ A real, working **offline-first personal budgeting application** that follows lo
 
 ## 🚀 Live Demo
 
-- **Frontend**: [BudgetBox App](https://budgetbox.vercel.app)
+- **Frontend**: [BudgetBox App](https://budgetbox-beta.vercel.app/)
+- **Backend**: [BudgetBox Backend](https://budgetbox-production-456a.up.railway.app/)
 - **GitHub Repo**: [satyansh911/BudgetBox](https://github.com/satyansh911/BudgetBox)
 
 ## ✨ Key Features
