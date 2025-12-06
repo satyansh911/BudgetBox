@@ -11,11 +11,25 @@ const port = process.env.PORT || 3001;
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
-    rejectUnauthorized: false
-  }
+    rejectUnauthorized: false,
+  },
 });
 
-app.use(cors());
+const allowedOrigins = [
+  'https://budgetbox-beta.vercel.app',
+  'http://localhost:3000',
+];
+
+const corsOptions = {
+  origin: allowedOrigins,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: false,
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+
 app.use(express.json());
 
 const authenticateToken = (req, res, next) => {
@@ -65,11 +79,14 @@ const initDatabase = async () => {
     `);
 
     const hashedPassword = await bcrypt.hash('HireMe@2025!', 10);
-    await pool.query(`
+    await pool.query(
+      `
       INSERT INTO users (email, password_hash, name)
       VALUES ('hire-me@anshumat.org', $1, 'Demo User')
       ON CONFLICT (email) DO NOTHING;
-    `, [hashedPassword]);
+    `,
+      [hashedPassword]
+    );
 
     console.log('Database initialized successfully');
   } catch (error) {
@@ -122,7 +139,8 @@ app.post('/api/budget/sync', authenticateToken, async (req, res) => {
     const budget = req.body;
     const userId = req.user.id;
 
-    const result = await pool.query(`
+    const result = await pool.query(
+      `
       INSERT INTO budgets (
         user_id, month, income, monthly_bills, food, transport, 
         subscriptions, miscellaneous, updated_at
@@ -138,16 +156,18 @@ app.post('/api/budget/sync', authenticateToken, async (req, res) => {
         miscellaneous = $8,
         updated_at = CURRENT_TIMESTAMP
       RETURNING *;
-    `, [
-      userId,
-      budget.month,
-      budget.income,
-      budget.monthlyBills,
-      budget.food,
-      budget.transport,
-      budget.subscriptions,
-      budget.miscellaneous,
-    ]);
+    `,
+      [
+        userId,
+        budget.month,
+        budget.income,
+        budget.monthlyBills,
+        budget.food,
+        budget.transport,
+        budget.subscriptions,
+        budget.miscellaneous,
+      ]
+    );
 
     res.json({
       success: true,
