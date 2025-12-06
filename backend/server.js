@@ -3,51 +3,48 @@ const cors = require('cors');
 const { Pool } = require('pg');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
-require('dotenv').config();
 
 const app = express();
-const port = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3001;
+
+/* ---------- CORS ---------- */
+
+app.use(cors({
+  origin: [
+    "https://budgetbox-beta.vercel.app",
+    "http://localhost:3000"
+  ],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
+
+app.options("*", cors());
+
+app.use(express.json());
+
+/* ---------- DB ---------- */
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false,
-  },
+  ssl: { rejectUnauthorized: false }   // for Supabase
 });
 
-const allowedOrigins = [
-  'https://budgetbox-beta.vercel.app',
-  'http://localhost:3000',
-];
-
-const corsOptions = {
-  origin: allowedOrigins,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: false,
-};
-
-app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
-
-app.use(express.json());
+/* ---------- AUTH MIDDLEWARE ---------- */
 
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
-  if (!token) {
-    return res.status(401).json({ error: 'No token provided' });
-  }
+  if (!token) return res.status(401).json({ error: 'No token provided' });
 
   jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-    if (err) {
-      return res.status(403).json({ error: 'Invalid token' });
-    }
+    if (err) return res.status(403).json({ error: 'Invalid token' });
     req.user = user;
     next();
   });
 };
+
+/* ---------- DB INIT ---------- */
 
 const initDatabase = async () => {
   try {
@@ -84,16 +81,24 @@ const initDatabase = async () => {
       INSERT INTO users (email, password_hash, name)
       VALUES ('hire-me@anshumat.org', $1, 'Demo User')
       ON CONFLICT (email) DO NOTHING;
-    `,
+      `,
       [hashedPassword]
     );
 
-    console.log('Database initialized successfully');
+    console.log('✅ Database initialized successfully');
   } catch (error) {
-    console.error('Database initialization error:', error);
+    console.error('❌ Database initialization error:', error);
   }
 };
 
+/* ---------- ROUTES ---------- */
+
+// health (for quick checks)
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
+// LOGIN
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -134,6 +139,7 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+// SYNC BUDGET
 app.post('/api/budget/sync', authenticateToken, async (req, res) => {
   try {
     const budget = req.body;
@@ -156,7 +162,7 @@ app.post('/api/budget/sync', authenticateToken, async (req, res) => {
         miscellaneous = $8,
         updated_at = CURRENT_TIMESTAMP
       RETURNING *;
-    `,
+      `,
       [
         userId,
         budget.month,
@@ -179,6 +185,7 @@ app.post('/api/budget/sync', authenticateToken, async (req, res) => {
   }
 });
 
+// GET LATEST BUDGET
 app.get('/api/budget/latest', authenticateToken, async (req, res) => {
   try {
     const { month } = req.query;
@@ -213,11 +220,9 @@ app.get('/api/budget/latest', authenticateToken, async (req, res) => {
   }
 });
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok' });
-});
+/* ---------- START SERVER ---------- */
 
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
   initDatabase();
 });
